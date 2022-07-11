@@ -1,0 +1,50 @@
+version: '3'
+
+services:
+  mosquitto:
+    image: toke/mosquitto
+    container_name: quinkle_mqtt
+    ports:
+     - 9500:9001 # websocket
+     - 2800:1883 # mqtt
+    volumes: 
+      - ./data/mqtt/config:/mqtt/config
+      - ./data/mqtt/data:/mqtt/data
+      - ./data/mqtt/log:/mqtt/log
+    restart: unless-stopped
+  
+  redis:
+    image: redis:6.2-alpine
+    container_name: quinkle_redis
+    ports:
+     - 6300:6379
+    command: redis-server --save 20 1 --loglevel warning --requirepass ${REDIS_PASSWORD}
+    env_file:
+      - ./.env
+    volumes: 
+      - ./data/redis:/data
+    restart: unless-stopped
+
+  mongodb:
+    image: mongo:5.0
+    container_name: quinkle_mongo
+    ports:
+      - 2500:27017
+    env_file:
+      - ./.env
+    volumes:
+      - ./data/db:/data/db
+    restart: unless-stopped
+  
+  mqtt_callbacks:
+    build:
+      context: ./callbacks
+    container_name: quinkle_mqtt_callbacks
+    env_file:
+      - ./.env
+    volumes:
+      - ./callbacks:/app
+    depends_on:
+      - mosquitto
+      - redis
+    restart: unless-stopped
