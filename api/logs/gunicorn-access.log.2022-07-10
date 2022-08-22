@@ -1,2 +1,0 @@
-192.168.0.90:58972 - "POST /device/request?mac=48:3f:da:79:7e:7d HTTP/1.1" 200
-192.168.0.90:58988 - "POST /device/request?mac=48:3f:da:79:7e:7d HTTP/1.1" 200

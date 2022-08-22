@@ -70,7 +70,7 @@ class MqttCallbacks:
         def on_message(client, userdata, msg):
             # decode received message
             mac = str(msg.payload.decode("utf-8"))
-            
+
             # updated heartbeat time to redis
             self.redis.set(f"updated_at/{mac}", time.time())
 

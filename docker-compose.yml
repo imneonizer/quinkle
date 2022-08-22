@@ -1,0 +1,14 @@
+version: '3'
+
+services:
+  ui:
+    build:
+      context: ./ui
+    container_name: quinkle_ui
+    ports:
+      - 3210:3000
+    env_file:
+      - ./.env
+    volumes:
+      - ./ui:/app
+    restart: unless-stopped

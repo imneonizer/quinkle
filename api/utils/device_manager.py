@@ -14,9 +14,7 @@ class DeviceManager:
         self.mqtt_host = mqtt_host
         self.mqtt_port = mqtt_port
         self.redis = redis.Redis(
-            host=redis_host,
-            port=redis_port,
-            password=redis_password
+            host=redis_host, port=redis_port, password=redis_password
         )
 
         self.mqtt = mqtt.Client()
@@ -32,10 +30,9 @@ class DeviceManager:
             except Exception as e:
                 print(e)
                 time.sleep(1)
-                
 
     def register(self, meta):
-        mac = meta.get('mac', '')
+        mac = meta.get("mac", "")
         self.redis.set(f"device/{mac}", ujson.dumps(meta))
         self.redis.set(f"updated_at/{mac}", time.time())
         return self.OK
@@ -68,12 +65,18 @@ class DeviceManager:
         self.redis.delete(f"updated_at/{mac}")
         return self.OK
 
-    def request(self, mac, meta):        
-        msg_id = str(uuid.uuid4())[:8]
+    def get_random_id(self, length=8):
+        return str(uuid.uuid4())[:length]
+
+    def request(self, mac, meta, method="GET"):
+        msg_id = self.get_random_id()
         topic = f"/iot/{mac}/{msg_id}/stm"
+        meta.update({"method": method})
+
         try:
             self.mqtt.publish(topic, json.dumps(meta))
-        except: pass
+        except:
+            pass
 
         st = time.time()
         response_timeout = 2
@@ -84,6 +87,7 @@ class DeviceManager:
                 response = json.loads(response)
                 self.redis.delete(msg_key)
                 return response
-            elif (time.time() - st > response_timeout):
+            elif time.time() - st > response_timeout:
                 return {"msg": "timeout"}
+
         return {"msg": "device unreachable"}

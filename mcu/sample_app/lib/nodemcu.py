@@ -8,17 +8,16 @@ from lib.common.wifi import connect_wifi
 import ujson as json
 
 
-MAC_ADDR = ubinascii.hexlify(
-    network.WLAN().config('mac'), ':').decode().lower()
+MAC_ADDR = ubinascii.hexlify(network.WLAN().config("mac"), ":").decode().lower()
 
 
 class Topics:
-    subscribe = b'/iot/%s/+/stm' % MAC_ADDR
-    publish = b'/iot/%s/mts' % MAC_ADDR
-    register = b'%s/register' % publish
-    heartbeat = b'%s/heartbeat' % publish
-    response = b'%s/msg_id/response' % publish
-    events = b'%s/event_name/events' % publish
+    subscribe = b"/iot/%s/+/stm" % MAC_ADDR
+    publish = b"/iot/%s/mts" % MAC_ADDR
+    register = b"%s/register" % publish
+    heartbeat = b"%s/heartbeat" % publish
+    response = b"%s/msg_id/response" % publish
+    events = b"%s/event_name/events" % publish
 
 
 class Utils:
@@ -30,10 +29,10 @@ class Utils:
         while True:
             try:
                 connect_wifi(self.wifi_ssid, self.wifi_password, check=True)
-                print('Connecting to MQTT broker....')
+                print("Connecting to MQTT broker....")
                 self.mqtt.connect()
                 self.mqtt.subscribe(self.topics.subscribe)
-                print('Subscribed to %s' % self.topics.subscribe)
+                print("Subscribed to %s" % self.topics.subscribe)
                 break
             except Exception as e:
                 print(e)
@@ -42,11 +41,8 @@ class Utils:
     def register(self, schema):
         while True:
             try:
-                schema.update({'mac': MAC_ADDR})
-                self.mqtt.publish(
-                    self.topics.register,
-                    json.dumps(schema)
-                )
+                schema.update({"mac": MAC_ADDR})
+                self.mqtt.publish(self.topics.register, json.dumps(schema))
                 print("Registered Device = %s" % MAC_ADDR)
                 break
             except Exception as e:
@@ -80,19 +76,16 @@ class NodeMcu(Utils):
         self.schema = schema
         self.wifi_ssid = wifi_ssid
         self.wifi_password = wifi_password
-        self.mqtt = MQTTClient(
-            MAC_ADDR,
-            server=mqtt_host,
-            port=mqtt_port
-        )
+        self.mqtt = MQTTClient(MAC_ADDR, server=mqtt_host, port=mqtt_port)
 
     def set_mqtt_callback(self, callback):
         def callback_wrapper(client, topic, msg):
             response = callback(client, topic, msg)
             if response:
                 msg_id = topic.decode().split("/")[3]
-                resp_topic = b'%s/%s/response' % (self.topics.publish, msg_id)
+                resp_topic = b"%s/%s/response" % (self.topics.publish, msg_id)
                 client.publish(resp_topic, json.dumps(response))
+
         self.mqtt.set_callback(callback_wrapper)
 
     def callbacks(self):
@@ -106,7 +99,9 @@ class NodeMcu(Utils):
             machine.reset()
 
     def publish_event(self, event_name, data):
-        event_topic = b'%s/%s/events' % (self.topics.publish, event_name)
+        event_topic = b"%s/%s/events" % (self.topics.publish, event_name)
+        if not isinstance(data, str):
+            data = str(data)
         self.mqtt.publish(event_topic, data)
 
     def run(self, target=None, *args, **kwargs):
@@ -121,17 +116,24 @@ class NodeMcu(Utils):
 class Request:
     OK = {"msg": "ok"}
 
+    def get_route_handler(self, route):
+        if hasattr(self, route):
+            return getattr(self, route)
+
     def __call__(self, client, topic, msg):
-        msg = json.loads(msg)
-        if hasattr(self, "print_messages") \
-            and getattr(self, "print_messages"):
-            print(msg)
-            
-        res = []
-        for (k, v) in msg.items():
-            # print("%s => %s" % (k, v))
-            if hasattr(self, k):
-                res.append(getattr(self, k)(v) or self.OK)
-            else:
-                return {"msg": "no route to %s" % k}
-        return (res[0] if len(res) == 1 else res)
+        try:
+            msg = json.loads(msg)
+        except Exception as e:
+            print(e)
+            return {"msg": "Unable to parse message, error: %s" % e, "status_code": 500}
+
+        # print(msg)
+
+        method = msg.pop("method", "")
+        route = msg.pop("route", "unknown")
+        route_handler = self.get_route_handler(route)
+
+        if not route_handler:
+            return {"msg": "route %s doesn't exists" % route, "status_code": 404}
+
+        return route_handler(msg.pop("data", {}), method=method)
